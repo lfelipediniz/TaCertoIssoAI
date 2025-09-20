@@ -79,6 +79,12 @@ REGRAS IMPORTANTES:
 6. Inclua declarações sobre eventos, pessoas, organizações, datas, números, políticas, relações, características
 7. Normalize o texto das alegações (remova gírias, corrija erros óbvios, mantenha o sentido)
 
+CRÍTICO - NÃO INFIRA ALEGAÇÕES DE URLS:
+8. EXTRAIA APENAS o que o usuário EXPLICITAMENTE declarou no texto
+9. NÃO faça suposições ou inferências baseadas no conteúdo, título ou caminho de URLs/links
+10. NÃO crie alegações baseadas no que você acha que um link pode conter
+11. Se o usuário só compartilhou um link sem fazer alegações explícitas, retorne lista vazia
+
 NOTA IMPORTANTE: Nossa pipeline fará fact-checking posterior usando fontes confiáveis e especializadas. Sua função é apenas extrair, não filtrar por veracidade.
 
 EXEMPLOS DE ALEGAÇÕES PARA EXTRAIR:
@@ -89,8 +95,15 @@ EXEMPLOS DE ALEGAÇÕES PARA EXTRAIR:
 ✓ "O TSE proibiu pesquisas eleitorais em 2024"
 ✓ "A empresa Y demitiu 1000 funcionários"
 
+EXEMPLO COM URLS (EXTRAIR APENAS ALEGAÇÃO EXPLÍCITA):
+Texto: "Flavio bolsonaro amo o PT segundo esse link: https://site.com/flavio-defende-anistia"
+✓ CORRETO: Extrair "Flavio Bolsonaro ama o PT"
+✗ ERRADO: Extrair "Flavio Bolsonaro defende anistia" (baseado na URL)
+
 EXEMPLOS DO QUE NÃO EXTRAIR:
 ✗ "O que você acha sobre...?"
+✗ Alegações inferidas de títulos/caminhos de URLs
+✗ Conteúdo que você assume estar nos links
 
 Responda sempre em português brasileiro."""
 
