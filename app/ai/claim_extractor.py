@@ -41,11 +41,14 @@ class ClaimExtractor:
     def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.0):
         """Initialize the claim extractor with OpenAI model."""
 
+        # Get fresh settings to ensure .env is loaded
+        current_settings = get_settings()
+        
         # Initialize OpenAI model following LangChain best practices
         self.model = ChatOpenAI(
             model=model_name,
             temperature=temperature,
-            api_key=settings.OPENAI_API_KEY
+            api_key=current_settings.OPENAI_API_KEY
         )
 
         # Create prompt template following consistent message handling
@@ -65,28 +68,29 @@ class ClaimExtractor:
         System prompt for claim extraction in Portuguese.
         Follows LangChain best practice of keeping prompts in separate methods.
         """
-        return """Você é um especialista em extração de alegações verificáveis. Sua tarefa é analisar textos de usuários do WhatsApp em português brasileiro e extrair alegações factuais que podem ser verificadas.
+        return """Você é um especialista em extração de alegações. Sua tarefa é analisar textos de usuários do WhatsApp em português brasileiro e extrair TODAS as alegações factuais presentes, independentemente de serem verdadeiras, falsas, controversas ou especulativas.
 
 REGRAS IMPORTANTES:
-1. Extraia APENAS alegações verificáveis (fatos que podem ser confirmados ou refutados)
-2. Ignore perguntas, opiniões pessoais, e especulações
+1. Extraia TODAS as alegações factuais - não filtre por veracidade ou verificabilidade
+2. Inclua alegações controversas, especulativas ou sensíveis - elas serão fact-checked posteriormente com fontes confiáveis
 3. Se houver múltiplas alegações, extraia cada uma separadamente
 4. Identifique e extraia qualquer URL/link presente no texto original
-5. Para cada alegação, forneça um comentário analítico sobre sua verificabilidade
-6. Foque em declarações sobre eventos, pessoas, organizações, datas, números, políticas
+5. Para cada alegação, forneça um comentário analítico neutro sobre seu conteúdo
+6. Inclua declarações sobre eventos, pessoas, organizações, datas, números, políticas, relações, características
 7. Normalize o texto das alegações (remova gírias, corrija erros óbvios, mantenha o sentido)
 
-EXEMPLOS DE ALEGAÇÕES VERIFICÁVEIS:
+NOTA IMPORTANTE: Nossa pipeline fará fact-checking posterior usando fontes confiáveis e especializadas. Sua função é apenas extrair, não filtrar por veracidade.
+
+EXEMPLOS DE ALEGAÇÕES PARA EXTRAIR:
 ✓ "O governo anunciou novas políticas ontem"
 ✓ "A vacina X causa infertilidade"
+✓ "Pessoas com olhos azuis são mais inteligentes"
+✓ "Político X tem relacionamento com Político Y"
 ✓ "O TSE proibiu pesquisas eleitorais em 2024"
 ✓ "A empresa Y demitiu 1000 funcionários"
 
 EXEMPLOS DO QUE NÃO EXTRAIR:
 ✗ "O que você acha sobre...?"
-✗ "Eu acredito que..."
-✗ "Talvez seja..."
-✗ "Deveríamos..."
 
 Responda sempre em português brasileiro."""
 
@@ -192,13 +196,12 @@ def create_claim_extractor(model_name: str = "gpt-4o") -> ClaimExtractor:
 
 
 # Async helper function for direct usage
-async def extract_claims_from_text(text: str, chat_id: str = "unknown") -> ClaimExtractionResult:
+async def extract_claims_from_text(text: str) -> ClaimExtractionResult:
     """
     Convenience function to extract claims from raw text.
 
     Args:
         text: Raw text to analyze
-        chat_id: Optional chat identifier
 
     Returns:
         ClaimExtractionResult with extracted claims
@@ -206,7 +209,6 @@ async def extract_claims_from_text(text: str, chat_id: str = "unknown") -> Claim
     extractor = create_claim_extractor()
 
     user_input = UserInput(
-        chatId=chat_id,
         text=text,
         locale="pt-BR"
     )
