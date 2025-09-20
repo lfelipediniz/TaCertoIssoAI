@@ -1,17 +1,14 @@
-from typing import Optional, List
+from typing import Optional
 from pydantic import BaseModel, Field
 from enum import Enum
-
-# Import Citation from factchecking module
-from app.models.factchecking import Citation
 
 
 # ===== ENUMS FOR TYPE SAFETY =====
 class VerdictLabel(str, Enum):
-    TRUE = "true"
-    FALSE = "false"
-    MISLEADING = "misleading"
-    UNVERIFIABLE = "unverifiable"
+    TRUE = "verdadeiro"
+    FALSE = "falso"
+    MISLEADING = "enganoso"
+    UNVERIFIABLE = "não verificável"
 
 
 class ProcessingStage(str, Enum):
@@ -76,17 +73,17 @@ class AnalysisResponse(BaseModel):
     """Response from fact-checking analysis"""
     message_id: str = Field(..., description="Unique identifier for this analysis")
     verdict: str = Field(..., description="Fact-check verdict")
-    rationale: str = Field(..., description="Explanation of the verdict")
-    citations: List[Citation] = Field(default_factory=list, description="Supporting citations")
+    rationale: str = Field(..., description="Complete analysis text with context, verdicts, and citations")
+    responseWithoutLinks: str = Field(..., description="Analysis text before sources section (before 'Fontes de apoio:')")
     processing_time_ms: int = Field(default=0, description="Processing time in milliseconds")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "message_id": "analysis_123",
-                "verdict": "true",
-                "rationale": "The government announcement is confirmed by official sources",
-                "citations": [],
+                "verdict": "text_analysis",
+                "rationale": "O texto contém uma alegação sobre anúncio governamental. A informação foi verificada contra fontes oficiais.\n\nAnálise por alegação:\n• Governo anunciou novas políticas: VERDADEIRO\n\nFontes de apoio:\n- Portal Oficial: \"Novas políticas foram anunciadas ontem\" (https://gov.example.com/news)",
+                "responseWithoutLinks": "O texto contém uma alegação sobre anúncio governamental. A informação foi verificada contra fontes oficiais.\n\nAnálise por alegação:\n• Governo anunciou novas políticas: VERDADEIRO",
                 "processing_time_ms": 3500
             }
         }

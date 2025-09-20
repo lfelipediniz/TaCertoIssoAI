@@ -5,9 +5,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.models.factchecking import (
     AdjudicationInput, 
     FactCheckResult, 
-    ExtractedClaim, 
     ClaimEvidence,
-    Citation
+    Citation,
+    EnrichedClaim,
 )
 from app.core.config import get_settings
 
@@ -23,23 +23,26 @@ reasoning_model = ChatOpenAI(
 
 # Portuguese adjudication prompt
 adjudication_prompt = ChatPromptTemplate.from_messages([
-    ("system", """Você é um especialista em verificação de fatos. Analise as alegações fornecidas contra as evidências disponíveis e forneça um veredicto fundamentado.
+    ("system", """Você é um especialista em verificação de fatos. Analise as alegações contra as evidências e forneça uma análise em texto simples e claro.
 
-REGRAS IMPORTANTES:
-1. Use APENAS as evidências fornecidas - não utilize conhecimento externo
-2. Se as fontes conflitam ou são insuficientes → 'unverifiable'
-3. Use 'misleading' se os fatos são verdadeiros mas o contexto induz ao erro
-4. Prefira fontes recentes e de autoridades reconhecidas
-5. Para múltiplas alegações, determine um veredicto geral:
-   - Se todas são 'true' → 'true'
-   - Se todas são 'false' → 'false' 
-   - Se misturadas → 'mixed'
-   - Se maioria é 'unverifiable' → 'unverifiable'
-6. Forneça explicação em português claro e objetivo
-7. Inclua pelo menos 3 citações quando possível
-8. Seja específico sobre datas, contexto e nuances
+FORMATO DE RESPOSTA:
+Retorne apenas um texto simples (não JSON) seguindo este formato:
 
-VERDICTS DISPONÍVEIS: 'true', 'false', 'misleading', 'unverifiable', 'mixed'"""),
+{{2-3 frases descrevendo o texto de entrada, as alegações e o contexto geral}}
+
+         Análise por alegação:
+         • [Alegação 1]: [VERDICT em maiúsculo - VERDADEIRO/FALSO/ENGANOSO/NÃO VERIFICÁVEL]
+         • [Alegação 2]: [VERDICT em maiúsculo]
+
+Fontes de apoio:
+- [Publisher]: "[Citação]" ([URL])
+- [Publisher]: "[Citação]" ([URL])
+
+REGRAS:
+    1. Use APENAS as evidências fornecidas
+    2. VERDICTS: VERDADEIRO, FALSO, ENGANOSO, NÃO VERIFICÁVEL
+    3. Inclua as fontes mais relevantes
+    4. Seja claro e objetivo"""),
     
     ("user", """CONSULTA ORIGINAL DO USUÁRIO:
 {original_query}
@@ -51,20 +54,13 @@ EVIDÊNCIAS COLETADAS:
 {evidence_text}
 
 ANÁLISE SOLICITADA:
-Por favor, analise cada alegação individualmente e depois forneça um veredicto geral. Considere:
-- A qualidade e credibilidade das fontes
-- A data das informações vs. quando a alegação foi feita
-- Contexto e nuances importantes
-- Contradições entre fontes
-
-Forneça o resultado no formato estruturado solicitado.""")
+Forneça uma análise em texto simples seguindo o formato especificado no sistema. Use apenas as evidências fornecidas.""")
 ])
 
-# Create the adjudication chain with structured output
-# Note: Using response_format="json_object" as fallback if schema issues persist
+# Create the adjudication chain for text output
 adjudication_chain = (
     adjudication_prompt 
-    | reasoning_model.with_structured_output(FactCheckResult)
+    | reasoning_model
 )
 
 
@@ -76,7 +72,7 @@ async def adjudicate_claims(adjudication_input: AdjudicationInput) -> FactCheckR
         adjudication_input: Contains original text, claims, and evidence
         
     Returns:
-        FactCheckResult with overall verdict, rationale, and citations
+        FactCheckResult with analysis text
     """
     try:
         # Format claims for the prompt
@@ -86,24 +82,30 @@ async def adjudicate_claims(adjudication_input: AdjudicationInput) -> FactCheckR
         evidence_text = _format_evidence_for_prompt(adjudication_input.evidence_map)
         
         # Invoke the adjudication chain
-        result = await adjudication_chain.ainvoke({
+        response = await adjudication_chain.ainvoke({
             "original_query": adjudication_input.original_user_text,
             "claims_text": claims_text,
             "evidence_text": evidence_text
         })
         
-        # Validate and enhance the result
-        result = _validate_and_enhance_result(result, adjudication_input)
+        # Extract text content from response
+        analysis_text = response.content if hasattr(response, 'content') else str(response)
         
-        return result
+        return FactCheckResult(
+            original_query=adjudication_input.original_user_text,
+            analysis_text=analysis_text
+        )
         
     except Exception as e:
         # Fallback to unverifiable with error explanation
-        return _create_fallback_result(adjudication_input, str(e))
+        return FactCheckResult(
+            original_query=adjudication_input.original_user_text,
+            analysis_text=f"Erro durante processamento: {str(e)}. Não foi possível completar a análise."
+        )
 
 
-def _format_claims_for_prompt(claims: List[ExtractedClaim]) -> str:
-    """Format extracted claims for the LLM prompt"""
+def _format_claims_for_prompt(claims: List[EnrichedClaim]) -> str:
+    """Format enriched claims for the LLM prompt"""
     if not claims:
         return "Nenhuma alegação específica foi extraída."
     
@@ -116,6 +118,16 @@ def _format_claims_for_prompt(claims: List[ExtractedClaim]) -> str:
         
         if claim.original_links:
             claim_text += f"   **Links originais**: {', '.join(claim.original_links)}\n"
+        
+        if claim.enriched_links:
+            claim_text += f"   **Conteúdo dos links**: \n"
+            for link in claim.enriched_links:
+                if link.extraction_status == "success":
+                    link_content = link.summary if link.summary else link.content[:200] + "..."
+                    link_text = f"     - URL: {link.url}\n       Título: {link.title}\n       Resumo: {link_content}\n"
+                    claim_text += link_text
+                else:
+                    claim_text += f"     - URL: {link.url} (Falha na extração: {link.extraction_notes})\n"
         
         claim_text += f"   **Análise LLM**: {claim.llm_comment}\n"
         
@@ -153,36 +165,6 @@ def _format_evidence_for_prompt(evidence_map: Dict[str, ClaimEvidence]) -> str:
     
     return "\n".join(formatted_evidence)
 
-
-def _validate_and_enhance_result(result: FactCheckResult, input_data: AdjudicationInput) -> FactCheckResult:
-    """Validate and enhance the LLM result"""
-    
-    # Ensure we have the original query
-    if not result.original_query:
-        result.original_query = input_data.original_user_text
-    
-    # Validate verdict is in allowed options
-    allowed_verdicts = ["true", "false", "misleading", "unverifiable", "mixed"]
-    if result.overall_verdict not in allowed_verdicts:
-        result.overall_verdict = "unverifiable"
-    
-    # Ensure we have at least one citation if evidence was available
-    if not result.supporting_citations and input_data.evidence_map:
-        # Extract some citations from the evidence
-        all_citations = []
-        for evidence in input_data.evidence_map.values():
-            all_citations.extend(evidence.citations)
-        
-        # Take up to 3 best citations
-        result.supporting_citations = all_citations[:3]
-    
-    # Ensure rationale is reasonable length
-    if len(result.rationale) < 10:
-        result.rationale = "Análise baseada nas evidências fornecidas não permite conclusão definitiva."
-    
-    return result
-
-
 def _create_fallback_result(input_data: AdjudicationInput, error_msg: str) -> FactCheckResult:
     """Create a fallback result when adjudication fails"""
     
@@ -207,23 +189,3 @@ def _create_fallback_result(input_data: AdjudicationInput, error_msg: str) -> Fa
                  f"Recomendamos verificar manualmente as fontes disponíveis. Erro: {error_msg[:100]}",
         supporting_citations=citations[:3]  # Max 3 citations
     )
-
-
-async def generate_citations(sources: List[Dict]) -> List[Citation]:
-    """
-    Convert source dictionaries to Citation objects
-    """
-    citations = []
-    for source in sources:
-        try:
-            citation = Citation(
-                url=source.get("url", ""),
-                title=source.get("title", ""),
-                publisher=source.get("publisher", ""),
-                quoted=source.get("quoted", "")
-            )
-            citations.append(citation)
-        except Exception:
-            continue  # Skip invalid citations
-    
-    return citations
