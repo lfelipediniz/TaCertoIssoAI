@@ -179,13 +179,39 @@ Visit http://localhost:8000/docs for interactive Swagger documentation.
 
 ## Deployment
 
-**Heroku:**
+### Render.com (Recomendado)
+
+1. **Connect Repository:**
+   - Go to [render.com](https://render.com)
+   - Create new Web Service
+   - Connect your GitHub repository
+
+2. **Configure Build Settings:**
+   ```
+   Build Command: pip install -r requirements.txt
+   Start Command: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+   ```
+
+3. **Set Environment Variables:**
+   ```
+   OPENAI_API_KEY=your_openai_api_key_here
+   GOOGLE_API_KEY=your_google_api_key_here
+   DEBUG=False
+   PORT=8000
+   SECRET_KEY=your-secret-key-here
+   ```
+
+4. **Deploy:**
+   - Render will automatically build and deploy from your main branch
+   - Your API will be available at: `https://your-app-name.onrender.com`
+
+### Heroku:
 ```bash
 # Uses Procfile and runtime.txt
 git push heroku main
 ```
 
-**Render/Railway:**
+### Railway:
 ```bash
 # Uses gunicorn command from Procfile
 # Set environment variables in platform dashboard
