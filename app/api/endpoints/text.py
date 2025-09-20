@@ -95,10 +95,13 @@ async def test_claims_with_urls_endpoint():
 
 
 @router.get("/test-link-enrichment")
-async def test_link_enrichment_endpoint():
+async def test_link_enrichment_endpoint(url: str = None):
     """
     Test endpoint for link enrichment (Step 2.5) using real web scraping
     Saves output to timestamped file like other pipeline steps
+    
+    Args:
+        url: Optional URL to test. If not provided, uses default test URLs
     """
     try:
         from app.models.factchecking import ClaimExtractionResult, ExtractedClaim
@@ -114,26 +117,38 @@ async def test_link_enrichment_endpoint():
         os.makedirs(output_dir, exist_ok=True)
         
         # Create test claims with real URLs for testing
-        test_claims = [
-            ExtractedClaim(
-                text="Post do X/Twitter sobre teste de link enricher",
-                links=["https://x.com/lfdinizcosta/status/1969468124559716570"],
-                llm_comment="Teste específico do link enricher com X/Twitter",
-                entities=["X", "Twitter", "teste"]
-            ),
-            ExtractedClaim(
-                text="Informações sobre políticas públicas no Brasil",
-                links=["https://www.gov.br/pt-br"],
-                llm_comment="Alegação sobre políticas que pode ser verificada através de fontes oficiais",
-                entities=["políticas públicas", "Brasil"]
-            ),
-            ExtractedClaim(
-                text="Notícias sobre tecnologia",
-                links=["https://g1.globo.com/tecnologia/"],
-                llm_comment="Alegação sobre tecnologia que pode ter fontes verificáveis",
-                entities=["tecnologia", "notícias"]
-            )
-        ]
+        if url:
+            # Test only the provided URL
+            test_claims = [
+                ExtractedClaim(
+                    text=f"Teste de link enricher para: {url}",
+                    links=[url],
+                    llm_comment=f"Teste específico do link enricher com URL: {url}",
+                    entities=["teste", "link", "enricher"]
+                )
+            ]
+        else:
+            # Default test URLs
+            test_claims = [
+                ExtractedClaim(
+                    text="Post do X/Twitter sobre teste de link enricher",
+                    links=["https://x.com/lfdinizcosta/status/1969468124559716570"],
+                    llm_comment="Teste específico do link enricher com X/Twitter",
+                    entities=["X", "Twitter", "teste"]
+                ),
+                ExtractedClaim(
+                    text="Informações sobre políticas públicas no Brasil",
+                    links=["https://www.gov.br/pt-br"],
+                    llm_comment="Alegação sobre políticas que pode ser verificada através de fontes oficiais",
+                    entities=["políticas públicas", "Brasil"]
+                ),
+                ExtractedClaim(
+                    text="Notícias sobre tecnologia",
+                    links=["https://g1.globo.com/tecnologia/"],
+                    llm_comment="Alegação sobre tecnologia que pode ter fontes verificáveis",
+                    entities=["tecnologia", "notícias"]
+                )
+            ]
         
         claims_result = ClaimExtractionResult(
             original_text="Test text with multiple URLs for link enrichment",

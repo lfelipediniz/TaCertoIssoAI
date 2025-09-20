@@ -17,19 +17,27 @@ import logging
 import re
 import random
 import requests
+import os
 from bs4 import BeautifulSoup
 
 from newspaper import Article, Config
 from readability import Document
 import trafilatura
 from goose3 import Goose
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+
+# Selenium imports - only if available
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from webdriver_manager.chrome import ChromeDriverManager
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+    # Logger will be defined later, so we'll handle this warning in the functions
 
 from app.models.factchecking import (
     ClaimExtractionResult,
@@ -40,6 +48,37 @@ from app.models.factchecking import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _is_render_environment():
+    """Detecta se está rodando no Render."""
+    return (
+        os.getenv('RENDER') == 'true' or 
+        os.getenv('DYNO') is not None or  # Heroku
+        os.path.exists('/.dockerenv') or   # Docker
+        os.getenv('CONTAINER') == 'true'
+    )
+
+
+def _is_selenium_available():
+    """Verifica se Selenium está disponível e funcionando."""
+    if not SELENIUM_AVAILABLE:
+        return False
+    
+    # Verifica se Chrome/Chromium está disponível
+    try:
+        import subprocess
+        result = subprocess.run(['google-chrome', '--version'], 
+                              capture_output=True, text=True, timeout=5)
+        return result.returncode == 0
+    except:
+        try:
+            # Tenta chromium como fallback
+            result = subprocess.run(['chromium-browser', '--version'], 
+                                  capture_output=True, text=True, timeout=5)
+            return result.returncode == 0
+        except:
+            return False
 
 
 def _is_invalid_content(texto):
@@ -351,15 +390,39 @@ def _extrair_com_beautifulsoup(url):
 
 def _extrair_com_selenium(url):
     """Método 7: Selenium (para sites com JavaScript)"""
+    if not SELENIUM_AVAILABLE:
+        logger.debug("Selenium não disponível - pulando método selenium")
+        return None
+        
+    if not _is_selenium_available():
+        logger.debug("Selenium não disponível - pulando método selenium")
+        return None
+        
     try:
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--allow-running-insecure-content")
         chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Configurações específicas para ambiente containerizado
+        if _is_render_environment():
+            chrome_options.add_argument("--remote-debugging-port=9222")
+            chrome_options.add_argument("--disable-background-timer-throttling")
+            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+            chrome_options.add_argument("--disable-renderer-backgrounding")
+        
+        # Tenta usar ChromeDriver do sistema primeiro, depois webdriver-manager
+        try:
+            service = Service('/usr/local/bin/chromedriver')
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        except:
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
         
         try:
             driver.get(url)
@@ -400,11 +463,20 @@ def _extrair_com_selenium(url):
 
 def _extrair_com_selenium_avancado(url):
     """Método 8: Selenium Avançado (especialmente para X/Twitter)"""
+    if not SELENIUM_AVAILABLE:
+        logger.debug("Selenium não disponível - pulando método selenium avançado")
+        return None
+        
+    if not _is_selenium_available():
+        logger.debug("Selenium não disponível - pulando método selenium avançado")
+        return None
+        
     try:
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
@@ -415,10 +487,23 @@ def _extrair_com_selenium_avancado(url):
         chrome_options.add_argument("--disable-extensions")
         chrome_options.add_argument("--disable-plugins")
         chrome_options.add_argument("--disable-images")
-        chrome_options.add_argument("--disable-javascript")  # Desabilita JS para evitar detecção
         
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Configurações específicas para ambiente containerizado
+        if _is_render_environment():
+            chrome_options.add_argument("--remote-debugging-port=9222")
+            chrome_options.add_argument("--disable-background-timer-throttling")
+            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+            chrome_options.add_argument("--disable-renderer-backgrounding")
+        else:
+            chrome_options.add_argument("--disable-javascript")  # Desabilita JS para evitar detecção
+        
+        # Tenta usar ChromeDriver do sistema primeiro, depois webdriver-manager
+        try:
+            service = Service('/usr/local/bin/chromedriver')
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        except:
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
         
         try:
             # Executa script para ocultar que é um bot
@@ -505,11 +590,16 @@ def extrair_noticia_principal_de_link(url):
         ("beautifulsoup", _extrair_com_beautifulsoup)
     ]
     
-    # Fase 2: Métodos pesados (apenas se necessário)
-    metodos_pesados = [
-        ("selenium", _extrair_com_selenium),
-        ("selenium_avancado", _extrair_com_selenium_avancado)
-    ]
+    # Fase 2: Métodos pesados (apenas se Selenium estiver disponível)
+    metodos_pesados = []
+    if _is_selenium_available():
+        metodos_pesados = [
+            ("selenium", _extrair_com_selenium),
+            ("selenium_avancado", _extrair_com_selenium_avancado)
+        ]
+        logger.debug(f"🚀 Selenium disponível - métodos pesados habilitados")
+    else:
+        logger.debug(f"⚠️ Selenium não disponível - usando apenas métodos rápidos")
     
     # Para X/Twitter, adiciona goose3 na fase rápida
     if 'x.com' in url or 'twitter.com' in url:
@@ -540,30 +630,31 @@ def extrair_noticia_principal_de_link(url):
             logger.debug(f"❌ Erro com {nome_metodo}: {e}")
             continue
     
-    logger.debug(f"🔄 FASE 2: Tentando métodos pesados (Selenium) para {url}")
-    
-    # Se métodos rápidos falharam, tenta métodos pesados
-    for nome_metodo, funcao_metodo in metodos_pesados:
-        try:
-            logger.debug(f"Tentando extrair com {nome_metodo}...")
-            resultado = funcao_metodo(url)
-            
-            if resultado and resultado.get('texto_completo'):
-                texto = resultado['texto_completo'].strip()
+    # Se métodos rápidos falharam e Selenium está disponível, tenta métodos pesados
+    if metodos_pesados:
+        logger.debug(f"🔄 FASE 2: Tentando métodos pesados (Selenium) para {url}")
+        
+        for nome_metodo, funcao_metodo in metodos_pesados:
+            try:
+                logger.debug(f"Tentando extrair com {nome_metodo}...")
+                resultado = funcao_metodo(url)
                 
-                # Verifica se o conteúdo é válido
-                if len(texto) > 50 and not _is_invalid_content(texto):
-                    logger.debug(f"✅ Sucesso com {nome_metodo}!")
-                    resultado['metodo_usado'] = nome_metodo
-                    return resultado
+                if resultado and resultado.get('texto_completo'):
+                    texto = resultado['texto_completo'].strip()
+                    
+                    # Verifica se o conteúdo é válido
+                    if len(texto) > 50 and not _is_invalid_content(texto):
+                        logger.debug(f"✅ Sucesso com {nome_metodo}!")
+                        resultado['metodo_usado'] = nome_metodo
+                        return resultado
+                    else:
+                        logger.debug(f"❌ {nome_metodo} extraiu conteúdo inválido (JS disabled ou muito curto)")
                 else:
-                    logger.debug(f"❌ {nome_metodo} extraiu conteúdo inválido (JS disabled ou muito curto)")
-            else:
-                logger.debug(f"❌ {nome_metodo} não conseguiu extrair conteúdo suficiente")
-                
-        except Exception as e:
-            logger.debug(f"❌ Erro com {nome_metodo}: {e}")
-            continue
+                    logger.debug(f"❌ {nome_metodo} não conseguiu extrair conteúdo suficiente")
+                    
+            except Exception as e:
+                logger.debug(f"❌ Erro com {nome_metodo}: {e}")
+                continue
     
     logger.debug(f"❌ Todos os métodos falharam para {url}")
     return None
