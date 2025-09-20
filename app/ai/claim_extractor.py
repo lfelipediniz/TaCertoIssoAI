@@ -79,11 +79,11 @@ REGRAS IMPORTANTES:
 6. Inclua declarações sobre eventos, pessoas, organizações, datas, números, políticas, relações, características
 7. Normalize o texto das alegações (remova gírias, corrija erros óbvios, mantenha o sentido)
 
-CRÍTICO - NÃO INFIRA ALEGAÇÕES DE URLS:
+CRITICAL - HANDLING VERIFICATION REQUESTS AND LINKS:
 8. EXTRAIA APENAS o que o usuário EXPLICITAMENTE declarou no texto
-9. NÃO faça suposições ou inferências baseadas no conteúdo, título ou caminho de URLs/links
-10. NÃO crie alegações baseadas no que você acha que um link pode conter
-11. Se o usuário só compartilhou um link sem fazer alegações explícitas, retorne lista vazia
+9. EXCEÇÃO - Se o usuário pedir para "verificar", "checar", "confirmar" ou similar, OU compartilhar apenas um link, extraia as principais alegações do conteúdo/título da URL
+10. Para pedidos de verificação ou links isolados, identifique 1-3 alegações principais baseadas no título/conteúdo
+11. NÃO faça suposições quando há alegações explícitas + links - mantenha apenas as alegações do usuário
 
 NOTA IMPORTANTE: Nossa pipeline fará fact-checking posterior usando fontes confiáveis e especializadas. Sua função é apenas extrair, não filtrar por veracidade.
 
@@ -95,15 +95,25 @@ EXEMPLOS DE ALEGAÇÕES PARA EXTRAIR:
 ✓ "O TSE proibiu pesquisas eleitorais em 2024"
 ✓ "A empresa Y demitiu 1000 funcionários"
 
-EXEMPLO COM URLS (EXTRAIR APENAS ALEGAÇÃO EXPLÍCITA):
+EXEMPLOS COM URLS:
+
+CASO 1 - Alegação explícita + link:
 Texto: "Flavio bolsonaro amo o PT segundo esse link: https://site.com/flavio-defende-anistia"
 ✓ CORRETO: Extrair "Flavio Bolsonaro ama o PT"
 ✗ ERRADO: Extrair "Flavio Bolsonaro defende anistia" (baseado na URL)
 
+CASO 2 - Pedido de verificação:
+Texto: "Verifique essa reportagem: https://g1.com/brasil-perdeu-15-por-cento-praias"
+✓ CORRETO: Extrair "Brasil perdeu 15% das praias" (do título/conteúdo)
+✓ CORRETO: Extrair alegações principais do artigo
+
+CASO 3 - Link isolado:
+Texto: "https://site.com/vacinas-causam-autismo"
+✓ CORRETO: Extrair "Vacinas causam autismo" (do título/conteúdo)
+
 EXEMPLOS DO QUE NÃO EXTRAIR:
 ✗ "O que você acha sobre...?"
-✗ Alegações inferidas de títulos/caminhos de URLs
-✗ Conteúdo que você assume estar nos links
+✗ Alegações quando há texto explícito + link (usar só o texto explícito)
 
 Responda sempre em português brasileiro."""
 

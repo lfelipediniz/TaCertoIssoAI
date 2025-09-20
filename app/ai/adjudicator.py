@@ -15,8 +15,8 @@ settings = get_settings()
 
 # Initialize OpenAI model for reasoning
 reasoning_model = ChatOpenAI(
-    model="gpt-4o",  # Use latest reasoning model
-    temperature=0.1,  # Low temperature for consistency
+    model="o4-mini",  # Use reasoning model
+    # Note: o4-mini only supports default temperature (1)
     max_tokens=4000,  # Sufficient for detailed analysis
     timeout=30,  # 30 second timeout
 )
