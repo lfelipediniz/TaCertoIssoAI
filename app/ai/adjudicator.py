@@ -80,7 +80,7 @@ async def adjudicate_claims(adjudication_input: AdjudicationInput) -> FactCheckR
     """
     try:
         # Format claims for the prompt
-        claims_text = _format_claims_for_prompt(adjudication_input.claims)
+        claims_text = _format_claims_for_prompt(adjudication_input.enriched_claims)
         
         # Format evidence for the prompt
         evidence_text = _format_evidence_for_prompt(adjudication_input.evidence_map)
@@ -114,8 +114,8 @@ def _format_claims_for_prompt(claims: List[ExtractedClaim]) -> str:
         if claim.entities:
             claim_text += f"   **Entidades**: {', '.join(claim.entities)}\n"
         
-        if claim.links:
-            claim_text += f"   **Links mencionados**: {', '.join(claim.links)}\n"
+        if claim.original_links:
+            claim_text += f"   **Links originais**: {', '.join(claim.original_links)}\n"
         
         claim_text += f"   **Análise LLM**: {claim.llm_comment}\n"
         

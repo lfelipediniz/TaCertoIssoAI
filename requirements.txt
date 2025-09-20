@@ -14,6 +14,7 @@ langchain-community>=0.3.0
 openai>=1.0.0
 # Web scraping dependencies
 newspaper3k==0.2.8
+lxml>=4.6.0
 lxml[html_clean]>=6.0.0
 beautifulsoup4>=4.13.0
 requests>=2.31.0

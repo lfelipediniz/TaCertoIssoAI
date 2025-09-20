@@ -12,8 +12,7 @@ from typing import List, Optional
 import logging
 
 from app.models.factchecking import (
-    ClaimExtractionResult,
-    ExtractedClaim,
+    LinkEnrichmentResult,
     Citation,
     ClaimEvidence,
     EvidenceRetrievalResult
@@ -118,76 +117,47 @@ class GoogleFactCheckRetriever:
             return None
 
 
-async def retrieve_evidence(claims_result: ClaimExtractionResult) -> EvidenceRetrievalResult:
+async def retrieve_evidence_from_enriched(enrichment_result: LinkEnrichmentResult) -> EvidenceRetrievalResult:
     """
-    Main evidence retrieval function for Step 3 of the pipeline
+    Evidence retrieval function that works with enriched claims from Step 2.5
+    
+    Simply propagates enriched link data forward while doing normal Google API evidence retrieval.
     
     Args:
-        claims_result: Output from Step 2 (Claim Extraction)
+        enrichment_result: Output from Step 2.5 (Link Enrichment)
         
     Returns:
-        EvidenceRetrievalResult: Structured evidence for Step 4 (Adjudication)
+        EvidenceRetrievalResult: External evidence + enriched link content for Step 4 (Adjudication)
     """
     retriever = GoogleFactCheckRetriever()
     evidence_map = {}
     total_sources_found = 0
     
-    # Process each extracted claim
-    for claim in claims_result.claims:
-        logger.info(f"Retrieving evidence for claim: {claim.text}")
+    # Process each enriched claim - same logic as before, just different input structure
+    for enriched_claim in enrichment_result.enriched_claims:
+        logger.info(f"Retrieving evidence for claim: {enriched_claim.text}")
         
-        # Search for fact-check evidence
-        citations = await retriever.search_claim(claim.text)
+        # Use the SAME Google Fact-Check search logic as before
+        citations = await retriever.search_claim(enriched_claim.text)
         
-        # Create search queries used
-        search_queries = [
-            claim.text,
-            f"fact check {claim.text}",
-            # Add entity-based queries if entities exist
-            *[f"fact check {entity}" for entity in claim.entities[:2]]
-        ]
-        
-        # Build retrieval notes
-        retrieval_notes = f"Google Fact-Check API: Found {len(citations)} results"
-        if citations:
-            publishers = [c.publisher for c in citations]
-            retrieval_notes += f". Publishers: {', '.join(set(publishers))}"
-        
-        # Create ClaimEvidence
+        # Create ClaimEvidence that includes BOTH:
+        # 1. External evidence (Google Fact-Check citations)
+        # 2. Enriched links (user-provided URL content from Step 2.5)
         claim_evidence = ClaimEvidence(
-            claim_text=claim.text,
-            citations=citations,
-            search_queries=search_queries,
-            retrieval_notes=retrieval_notes
+            claim_text=enriched_claim.text,
+            citations=citations,  # External evidence from Google API
+            search_queries=[f"Google Fact-Check for: {enriched_claim.text}"],
+            enriched_links=enriched_claim.enriched_links,  # Propagated enriched content
+            retrieval_notes=f"Google API: {len(citations)} external sources. User links: {len(enriched_claim.enriched_links)} enriched."
         )
         
-        evidence_map[claim.text] = claim_evidence
+        evidence_map[enriched_claim.text] = claim_evidence
         total_sources_found += len(citations)
     
-    # Return structured result
     return EvidenceRetrievalResult(
         claim_evidence_map=evidence_map,
         total_sources_found=total_sources_found,
-        retrieval_time_ms=0  # Could add timing if needed
+        retrieval_time_ms=0  # TODO: Add timing
     )
 
 
-# Convenience function for direct usage
-async def retrieve_evidence_for_claims(claims: List[ExtractedClaim]) -> EvidenceRetrievalResult:
-    """
-    Convenience function to retrieve evidence for a list of claims
-    
-    Args:
-        claims: List of ExtractedClaim objects
-        
-    Returns:
-        EvidenceRetrievalResult
-    """
-    # Create a minimal ClaimExtractionResult
-    claims_result = ClaimExtractionResult(
-        original_text=" | ".join([claim.text for claim in claims]),
-        claims=claims,
-        processing_notes=f"Processing {len(claims)} claims for evidence retrieval"
-    )
-    
-    return await retrieve_evidence(claims_result)

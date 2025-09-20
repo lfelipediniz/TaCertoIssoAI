@@ -22,7 +22,8 @@ from app.models.factchecking import (
 )
 from app.ai.claim_extractor import create_claim_extractor
 from app.ai.adjudicator import adjudicate_claims
-from app.ai.factchecking.evidence_retrieval import retrieve_evidence
+from app.ai.factchecking.evidence_retrieval import retrieve_evidence_from_enriched
+from app.ai.factchecking.link_enricher import create_link_enricher
 
 
 async def process_text_request(request: TextRequest) -> AnalysisResponse:
@@ -217,9 +218,9 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
     os.makedirs(output_dir, exist_ok=True)
     
     try:
-        # Step 1: Claim Extraction with real input
+        # Step 1: Claim Extraction with real input (including URLs)
         user_input = UserInput(
-            text="vacina causa autismo e pessoas com olhos azuis sao mais inteligente",
+            text="Flavio bolsonaro amo o PT segundo esse link: https://noticias.uol.com.br/politica/ultimas-noticias/2025/09/20/flavio-bolsonaro-defende-anistia-pec-da-blindagem-de-pec-da-sobrevivencia.htm e as vacinas causam autismo segundo esse link https://familia.sbim.org.br/duvidas/mitos/o-mercurio-presente-nas-vacinas-causa-autismo",
             locale="pt-BR"
         )
         
@@ -238,15 +239,32 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
         with open(f"{output_dir}/step1_claims_{timestamp}.json", "w", encoding="utf-8") as f:
             json.dump(step1_output, f, indent=2, ensure_ascii=False)
         
-        # Step 3: Evidence Retrieval with real Google API
+        # Step 2.5: Link Enrichment
+        step25_start = time.time()
+        link_enricher = create_link_enricher()
+        enrichment_result = await link_enricher.enrich_links(claims_result)
+        
+        # Save Step 2.5 output
+        step25_output = {
+            "timestamp": timestamp,
+            "step": "2.5_link_enrichment",
+            "input": claims_result.dict(),
+            "output": enrichment_result.dict(),
+            "processing_time_ms": int((time.time() - step25_start) * 1000)
+        }
+        
+        with open(f"{output_dir}/step25_link_enrichment_{timestamp}.json", "w", encoding="utf-8") as f:
+            json.dump(step25_output, f, indent=2, ensure_ascii=False)
+        
+        # Step 3: Evidence Retrieval with enriched claims
         step3_start = time.time()
-        evidence_result = await retrieve_evidence(claims_result)
+        evidence_result = await retrieve_evidence_from_enriched(enrichment_result)
         
         # Save Step 3 output
         step3_output = {
             "timestamp": timestamp,
             "step": "3_evidence_retrieval",
-            "input": claims_result.dict(),
+            "input": enrichment_result.dict(),
             "output": evidence_result.dict(),
             "processing_time_ms": int((time.time() - step3_start) * 1000)
         }
@@ -254,13 +272,13 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
         with open(f"{output_dir}/step3_evidence_{timestamp}.json", "w", encoding="utf-8") as f:
             json.dump(step3_output, f, indent=2, ensure_ascii=False)
         
-        # Step 4: Adjudication with real evidence
+        # Step 4: Adjudication with enriched claims and evidence
         step4_start = time.time()
         adjudication_input = AdjudicationInput(
             original_user_text=user_input.text,
-            claims=claims_result.claims,
+            enriched_claims=enrichment_result.enriched_claims,
             evidence_map=evidence_result.claim_evidence_map,
-            additional_context="Pipeline completo: extração -> evidências -> adjudicação"
+            additional_context="Pipeline completo: extração -> enriquecimento -> evidências -> adjudicação"
         )
         
         final_result = await adjudicate_claims(adjudication_input)
@@ -284,6 +302,8 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
             "complete_pipeline_summary": {
                 "user_input": user_input.text,
                 "step1_claims_extracted": len(claims_result.claims),
+                "step25_links_processed": enrichment_result.total_links_processed,
+                "step25_successful_extractions": enrichment_result.successful_extractions,
                 "step3_total_sources": evidence_result.total_sources_found,
                 "step4_final_verdict": final_result.overall_verdict,
                 "step4_rationale": final_result.rationale,
@@ -292,6 +312,7 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
             },
             "files_created": [
                 f"step1_claims_{timestamp}.json",
+                f"step25_link_enrichment_{timestamp}.json",
                 f"step3_evidence_{timestamp}.json", 
                 f"step4_adjudication_{timestamp}.json",
                 f"pipeline_summary_{timestamp}.json"
@@ -392,8 +413,12 @@ async def test_evidence_retrieval() -> dict:
     )
     
     try:
-        # Test evidence retrieval
-        evidence_result = await retrieve_evidence(claims_result)
+        # Step 2.5: Link Enrichment first
+        link_enricher = create_link_enricher()
+        enrichment_result = await link_enricher.enrich_links(claims_result)
+        
+        # Test evidence retrieval with enriched claims
+        evidence_result = await retrieve_evidence_from_enriched(enrichment_result)
         
         processing_time = int((time.time() - start_time) * 1000)
         
