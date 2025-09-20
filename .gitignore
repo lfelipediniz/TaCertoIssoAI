@@ -263,3 +263,6 @@ credentials.json
 # Cache files
 .cache/
 *.cache
+
+
+/testoutput

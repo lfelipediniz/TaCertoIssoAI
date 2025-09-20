@@ -1,5 +1,4 @@
 import requests
-import json
 import sys
 import os
 
@@ -45,7 +44,6 @@ try:
 
     else:
         print(f"Nenhuma checagem de fatos encontrada para: '{texto_da_noticia}'")
-
 except requests.exceptions.HTTPError as http_err:
     print(f"Erro HTTP: {http_err}")
 except Exception as err:

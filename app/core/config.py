@@ -25,15 +25,7 @@ class Settings:
 
         # AI Services
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-        
-        # Debug: Print API key info
-        if self.OPENAI_API_KEY:
-            print(f"🔑 OpenAI API Key loaded: {self.OPENAI_API_KEY[:15]}...{self.OPENAI_API_KEY[-4:]} (length: {len(self.OPENAI_API_KEY)})")
-        else:
-            print("❌ OpenAI API Key not found in environment variables")
-
-        # Security
-        self.SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
+        self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
         # Processing Limits
         self.MAX_TEXT_LENGTH = int(os.getenv("MAX_TEXT_LENGTH", 10000))

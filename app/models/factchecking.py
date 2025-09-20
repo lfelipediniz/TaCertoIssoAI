@@ -70,6 +70,8 @@ class Citation(BaseModel):
     title: str
     publisher: str
     quoted: str
+    rating: Optional[str] = None  # Google fact-check rating: "Falso", "Enganoso", "Verdadeiro", etc.
+    review_date: Optional[str] = None  # When the fact-check was published
 
     class Config:
         json_schema_extra = {
