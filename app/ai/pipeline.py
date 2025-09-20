@@ -11,6 +11,7 @@ Follows LangChain best practices with structured inputs/outputs and async proces
 """
 
 import time
+from typing import Optional
 from app.models.schemas import TextRequest, AnalysisResponse
 from app.models.factchecking import (
     UserInput, 
@@ -24,11 +25,111 @@ from app.ai.claim_extractor import create_claim_extractor
 from app.ai.adjudicator import adjudicate_claims
 from app.ai.factchecking.evidence_retrieval import retrieve_evidence_from_enriched
 from app.ai.factchecking.link_enricher import create_link_enricher
+from app.core.config import get_settings
+
+
+def save_pipeline_step_json(step_name: str, step_data: dict, timestamp: str, prefix: str = "") -> Optional[str]:
+    """
+    Common function to save pipeline step data to JSON files.
+    Only saves if DEBUG environment variable is True.
+    
+    Args:
+        step_name: Name of the pipeline step (e.g., "1_claim_extraction")
+        step_data: Dictionary containing the step data to save
+        timestamp: Timestamp string for the filename
+        prefix: Optional prefix for the filename (e.g., "prod_", "test_")
+        
+    Returns:
+        Filename if saved, None if DEBUG is False or save failed
+    """
+    import json
+    import os
+    
+    # Check if DEBUG mode is enabled
+    settings = get_settings()
+    print(f"🔧 DEBUG mode: {settings.DEBUG}")  # Temporary debug print
+    if not settings.DEBUG:
+        print("❌ DEBUG is False, not saving JSON files")  # Temporary debug print
+        return None
+    
+    try:
+        # Get the project root directory for saving files
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(current_dir))
+        output_dir = os.path.join(project_root, "testoutput")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Create filename
+        filename = f"{prefix}{step_name}_{timestamp}.json"
+        filepath = os.path.join(output_dir, filename)
+        
+        # Save the data
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(step_data, f, indent=2, ensure_ascii=False)
+        
+        return filename
+        
+    except Exception as e:
+        # Log error but don't fail the pipeline
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to save JSON dump for {step_name}: {e}")
+        return None
+
+
+def save_final_result_json(final_data: dict, timestamp: str) -> Optional[str]:
+    """
+    Save the final pipeline result to both timestamped and latest result.json files.
+    Only saves if DEBUG environment variable is True.
+    
+    Args:
+        final_data: Complete pipeline result data
+        timestamp: Timestamp string for the filename
+        
+    Returns:
+        Filename if saved, None if DEBUG is False or save failed
+    """
+    import json
+    import os
+    
+    # Check if DEBUG mode is enabled
+    settings = get_settings()
+    if not settings.DEBUG:
+        return None
+    
+    try:
+        # Get the project root directory for saving files
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(current_dir))
+        output_dir = os.path.join(project_root, "testoutput")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save timestamped version
+        timestamped_filename = f"result_{timestamp}.json"
+        timestamped_filepath = os.path.join(output_dir, timestamped_filename)
+        
+        with open(timestamped_filepath, "w", encoding="utf-8") as f:
+            json.dump(final_data, f, indent=2, ensure_ascii=False)
+        
+        # Save latest version
+        latest_filepath = os.path.join(output_dir, "result.json")
+        with open(latest_filepath, "w", encoding="utf-8") as f:
+            json.dump(final_data, f, indent=2, ensure_ascii=False)
+        
+        return timestamped_filename
+        
+    except Exception as e:
+        # Log error but don't fail the pipeline
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to save final result JSON: {e}")
+        return None
 
 
 async def process_text_request(request: TextRequest) -> AnalysisResponse:
     """
     Main pipeline entry point for text-only fact-checking.
+    Runs the complete 5-step pipeline: Claim Extraction -> Link Enrichment -> Evidence Retrieval -> Adjudication
     
     Args:
         request: TextRequest containing the text to fact-check
@@ -36,7 +137,10 @@ async def process_text_request(request: TextRequest) -> AnalysisResponse:
     Returns:
         AnalysisResponse with fact-check results
     """
+    from datetime import datetime
+    
     start_time = time.time()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     try:
         # Step 1: Convert API request to UserInput
@@ -51,22 +155,102 @@ async def process_text_request(request: TextRequest) -> AnalysisResponse:
         claim_extractor = create_claim_extractor()
         claims_result: ClaimExtractionResult = await claim_extractor.extract_claims(user_input)
         
-        # For now, just return the claims extraction results
-        # TODO: Add steps 3 (Evidence Retrieval) and 4 (Adjudication)
+        # Save Step 1 output using common function
+        step1_output = {
+            "timestamp": timestamp,
+            "step": "1_claim_extraction",
+            "input": user_input.dict(),
+            "output": claims_result.dict(),
+            "processing_time_ms": int((time.time() - start_time) * 1000)
+        }
+        save_pipeline_step_json("step1_claims", step1_output, timestamp, "prod_")
+        
+        # Step 2.5: Link Enrichment
+        step25_start = time.time()
+        link_enricher = create_link_enricher()
+        enrichment_result = await link_enricher.enrich_links(claims_result)
+        
+        # Save Step 2.5 output using common function
+        step25_output = {
+            "timestamp": timestamp,
+            "step": "2.5_link_enrichment",
+            "input": claims_result.dict(),
+            "output": enrichment_result.dict(),
+            "processing_time_ms": int((time.time() - step25_start) * 1000)
+        }
+        save_pipeline_step_json("step25_link_enrichment", step25_output, timestamp, "prod_")
+        
+        # Step 3: Evidence Retrieval
+        step3_start = time.time()
+        evidence_result = await retrieve_evidence_from_enriched(enrichment_result)
+        
+        # Save Step 3 output using common function
+        step3_output = {
+            "timestamp": timestamp,
+            "step": "3_evidence_retrieval",
+            "input": enrichment_result.dict(),
+            "output": evidence_result.dict(),
+            "processing_time_ms": int((time.time() - step3_start) * 1000)
+        }
+        save_pipeline_step_json("step3_evidence", step3_output, timestamp, "prod_")
+        
+        # Step 4: Adjudication
+        step4_start = time.time()
+        adjudication_input = AdjudicationInput(
+            original_user_text=user_input.text,
+            enriched_claims=enrichment_result.enriched_claims,
+            evidence_map=evidence_result.claim_evidence_map,
+            additional_context="Production pipeline execution"
+        )
+        
+        final_result = await adjudicate_claims(adjudication_input)
+        
+        # Save Step 4 output using common function
+        step4_output = {
+            "timestamp": timestamp,
+            "step": "4_adjudication",
+            "input": adjudication_input.dict(),
+            "output": final_result.dict(),
+            "processing_time_ms": int((time.time() - step4_start) * 1000)
+        }
+        save_pipeline_step_json("step4_adjudication", step4_output, timestamp, "prod_")
         
         processing_time = int((time.time() - start_time) * 1000)
         
-        # Temporary response showing claim extraction results
-        claims_summary = [claim.text for claim in claims_result.claims]
-        notes = claims_result.processing_notes or "No processing notes"
-        
-        return AnalysisResponse(
-            message_id=f"test_{hash(request.text)}",
-            verdict="unverifiable",  # Temporary
-            rationale=f"Extracted {len(claims_result.claims)} claims: {claims_summary}. Notes: {notes}. Pipeline under development.",
-            citations=[],  # Empty for now
+        # Convert final result to AnalysisResponse format
+        api_response = AnalysisResponse(
+            message_id=f"prod_{hash(request.text)}",
+            verdict=final_result.overall_verdict,
+            rationale=final_result.rationale,
+            citations=final_result.supporting_citations,
             processing_time_ms=processing_time
         )
+        
+        # Save final result using common function
+        final_output = {
+            "timestamp": timestamp,
+            "request": request.dict(),
+            "response": api_response.dict(),
+            "pipeline_summary": {
+                "step1_claims_extracted": len(claims_result.claims),
+                "step25_links_processed": enrichment_result.total_links_processed,
+                "step25_successful_extractions": enrichment_result.successful_extractions,
+                "step3_total_sources": evidence_result.total_sources_found,
+                "step4_final_verdict": final_result.overall_verdict,
+                "step4_citations_count": len(final_result.supporting_citations),
+                "total_processing_time_ms": processing_time
+            },
+            "files_created": [
+                f"prod_step1_claims_{timestamp}.json",
+                f"prod_step25_link_enrichment_{timestamp}.json",
+                f"prod_step3_evidence_{timestamp}.json",
+                f"prod_step4_adjudication_{timestamp}.json",
+                f"result_{timestamp}.json"
+            ]
+        }
+        save_final_result_json(final_output, timestamp)
+        
+        return api_response
         
     except Exception as e:
         processing_time = int((time.time() - start_time) * 1000)
@@ -236,8 +420,7 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
             "processing_time_ms": int((time.time() - start_time) * 1000)
         }
         
-        with open(f"{output_dir}/step1_claims_{timestamp}.json", "w", encoding="utf-8") as f:
-            json.dump(step1_output, f, indent=2, ensure_ascii=False)
+        save_pipeline_step_json("step1_claims", step1_output, timestamp)
         
         # Step 2.5: Link Enrichment
         step25_start = time.time()
@@ -253,8 +436,7 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
             "processing_time_ms": int((time.time() - step25_start) * 1000)
         }
         
-        with open(f"{output_dir}/step25_link_enrichment_{timestamp}.json", "w", encoding="utf-8") as f:
-            json.dump(step25_output, f, indent=2, ensure_ascii=False)
+        save_pipeline_step_json("step25_link_enrichment", step25_output, timestamp)
         
         # Step 3: Evidence Retrieval with enriched claims
         step3_start = time.time()
@@ -269,8 +451,7 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
             "processing_time_ms": int((time.time() - step3_start) * 1000)
         }
         
-        with open(f"{output_dir}/step3_evidence_{timestamp}.json", "w", encoding="utf-8") as f:
-            json.dump(step3_output, f, indent=2, ensure_ascii=False)
+        save_pipeline_step_json("step3_evidence", step3_output, timestamp)
         
         # Step 4: Adjudication with enriched claims and evidence
         step4_start = time.time()
@@ -292,8 +473,7 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
             "processing_time_ms": int((time.time() - step4_start) * 1000)
         }
         
-        with open(f"{output_dir}/step4_adjudication_{timestamp}.json", "w", encoding="utf-8") as f:
-            json.dump(step4_output, f, indent=2, ensure_ascii=False)
+        save_pipeline_step_json("step4_adjudication", step4_output, timestamp)
         
         # Save complete pipeline summary
         total_processing_time = int((time.time() - start_time) * 1000)
@@ -319,8 +499,7 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
             ]
         }
         
-        with open(f"{output_dir}/pipeline_summary_{timestamp}.json", "w", encoding="utf-8") as f:
-            json.dump(pipeline_summary, f, indent=2, ensure_ascii=False)
+        save_pipeline_step_json("pipeline_summary", pipeline_summary, timestamp)
         
         # Return API response
         return {
@@ -364,8 +543,7 @@ async def test_full_pipeline_steps_1_3_4() -> dict:
             "processing_time_ms": processing_time
         }
         
-        with open(f"{output_dir}/error_{timestamp}.json", "w", encoding="utf-8") as f:
-            json.dump(error_output, f, indent=2, ensure_ascii=False)
+        save_pipeline_step_json("error", error_output, timestamp)
         
         return {
             "success": False,
