@@ -1,0 +1,10 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+sqlalchemy==2.0.23
+alembic==1.12.1
+redis==5.0.1
+httpx==0.25.2
+pillow>=10.4.0
+python-dotenv==1.0.0
+gunicorn==21.2.0
