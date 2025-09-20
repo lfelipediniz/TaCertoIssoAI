@@ -23,6 +23,13 @@ from newspaper import Article, Config
 from readability import Document
 import trafilatura
 from goose3 import Goose
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
 from app.models.factchecking import (
     ClaimExtractionResult,
@@ -342,6 +349,139 @@ def _extrair_com_beautifulsoup(url):
     return None
 
 
+def _extrair_com_selenium(url):
+    """Método 7: Selenium (para sites com JavaScript)"""
+    try:
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        try:
+            driver.get(url)
+            time.sleep(3)  # Aguarda carregar
+            
+            # Tenta extrair título
+            title = driver.title
+            
+            # Tenta extrair conteúdo principal
+            content_selectors = [
+                'article', 'main', '.content', '.post-content', 
+                '.article-content', '.entry-content', '[role="main"]'
+            ]
+            
+            content = ""
+            for selector in content_selectors:
+                elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                if elements:
+                    content = elements[0].text
+                    break
+            
+            if not content:
+                content = driver.find_element(By.TAG_NAME, "body").text
+            
+            return {
+                "titulo": title,
+                "autores": None,
+                "data_publicacao": None,
+                "texto_completo": content
+            }
+            
+        finally:
+            driver.quit()
+    except Exception as e:
+        logger.debug(f"Selenium extraction failed for {url}: {e}")
+    return None
+
+
+def _extrair_com_selenium_avancado(url):
+    """Método 8: Selenium Avançado (especialmente para X/Twitter)"""
+    try:
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--allow-running-insecure-content")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-plugins")
+        chrome_options.add_argument("--disable-images")
+        chrome_options.add_argument("--disable-javascript")  # Desabilita JS para evitar detecção
+        
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        try:
+            # Executa script para ocultar que é um bot
+            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            # Adiciona delay aleatório
+            time.sleep(random.uniform(2, 4))
+            
+            driver.get(url)
+            
+            # Aguarda mais tempo para carregar
+            time.sleep(5)
+            
+            # Tenta extrair título
+            title = driver.title
+            
+            # Para X/Twitter, tenta seletores específicos
+            if 'x.com' in url or 'twitter.com' in url:
+                content_selectors = [
+                    '[data-testid="tweetText"]',  # Texto do tweet
+                    '[data-testid="tweet"]',      # Container do tweet
+                    'article[data-testid="tweet"]',  # Artigo do tweet
+                    '[role="article"]',           # Artigo genérico
+                    '.tweet-text',                # Classe do texto do tweet
+                    '[data-testid="card.wrapper"]'  # Card wrapper
+                ]
+            else:
+                content_selectors = [
+                    'article', 'main', '.content', '.post-content', 
+                    '.article-content', '.entry-content', '[role="main"]'
+                ]
+            
+            content = ""
+            for selector in content_selectors:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if elements:
+                        content = elements[0].text
+                        if content and len(content.strip()) > 10:
+                            break
+                except:
+                    continue
+            
+            if not content:
+                try:
+                    content = driver.find_element(By.TAG_NAME, "body").text
+                except:
+                    content = ""
+            
+            return {
+                "titulo": title,
+                "autores": None,
+                "data_publicacao": None,
+                "texto_completo": content
+            }
+            
+        finally:
+            driver.quit()
+    except Exception as e:
+        logger.debug(f"Selenium avançado extraction failed for {url}: {e}")
+    return None
+
+
 def extrair_noticia_principal_de_link(url):
     """
     Tenta extrair o conteúdo de uma notícia usando múltiplas bibliotecas em sequência.
@@ -365,6 +505,12 @@ def extrair_noticia_principal_de_link(url):
         ("beautifulsoup", _extrair_com_beautifulsoup)
     ]
     
+    # Fase 2: Métodos pesados (apenas se necessário)
+    metodos_pesados = [
+        ("selenium", _extrair_com_selenium),
+        ("selenium_avancado", _extrair_com_selenium_avancado)
+    ]
+    
     # Para X/Twitter, adiciona goose3 na fase rápida
     if 'x.com' in url or 'twitter.com' in url:
         metodos_rapidos.insert(1, ("goose3", _extrair_com_goose3))
@@ -373,6 +519,31 @@ def extrair_noticia_principal_de_link(url):
     
     # Tenta métodos rápidos primeiro
     for nome_metodo, funcao_metodo in metodos_rapidos:
+        try:
+            logger.debug(f"Tentando extrair com {nome_metodo}...")
+            resultado = funcao_metodo(url)
+            
+            if resultado and resultado.get('texto_completo'):
+                texto = resultado['texto_completo'].strip()
+                
+                # Verifica se o conteúdo é válido
+                if len(texto) > 50 and not _is_invalid_content(texto):
+                    logger.debug(f"✅ Sucesso com {nome_metodo}!")
+                    resultado['metodo_usado'] = nome_metodo
+                    return resultado
+                else:
+                    logger.debug(f"❌ {nome_metodo} extraiu conteúdo inválido (JS disabled ou muito curto)")
+            else:
+                logger.debug(f"❌ {nome_metodo} não conseguiu extrair conteúdo suficiente")
+                
+        except Exception as e:
+            logger.debug(f"❌ Erro com {nome_metodo}: {e}")
+            continue
+    
+    logger.debug(f"🔄 FASE 2: Tentando métodos pesados (Selenium) para {url}")
+    
+    # Se métodos rápidos falharam, tenta métodos pesados
+    for nome_metodo, funcao_metodo in metodos_pesados:
         try:
             logger.debug(f"Tentando extrair com {nome_metodo}...")
             resultado = funcao_metodo(url)

@@ -116,6 +116,12 @@ async def test_link_enrichment_endpoint():
         # Create test claims with real URLs for testing
         test_claims = [
             ExtractedClaim(
+                text="Post do X/Twitter sobre teste de link enricher",
+                links=["https://x.com/lfdinizcosta/status/1969468124559716570"],
+                llm_comment="Teste específico do link enricher com X/Twitter",
+                entities=["X", "Twitter", "teste"]
+            ),
+            ExtractedClaim(
                 text="Informações sobre políticas públicas no Brasil",
                 links=["https://www.gov.br/pt-br"],
                 llm_comment="Alegação sobre políticas que pode ser verificada através de fontes oficiais",
