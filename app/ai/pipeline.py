@@ -218,11 +218,19 @@ async def process_text_request(request: TextRequest) -> AnalysisResponse:
         processing_time = int((time.time() - start_time) * 1000)
         
         # Convert final result to AnalysisResponse format
+        # Extract text before "Fontes de apoio:" for responseWithoutLinks
+        analysis_text = final_result.analysis_text
+        split_marker = "Fontes de apoio:"
+        if split_marker in analysis_text:
+            response_without_links = analysis_text.split(split_marker)[0].strip()
+        else:
+            response_without_links = analysis_text  # If no sources section, use full text
+        
         api_response = AnalysisResponse(
             message_id=f"prod_{hash(request.text)}",
-            verdict=final_result.overall_verdict,
-            rationale=final_result.rationale,
-            citations=final_result.supporting_citations,
+            verdict="text_analysis",  # Simple indicator that this is text-based
+            rationale=analysis_text,
+            responseWithoutLinks=response_without_links,
             processing_time_ms=processing_time
         )
         
@@ -236,8 +244,7 @@ async def process_text_request(request: TextRequest) -> AnalysisResponse:
                 "step25_links_processed": enrichment_result.total_links_processed,
                 "step25_successful_extractions": enrichment_result.successful_extractions,
                 "step3_total_sources": evidence_result.total_sources_found,
-                "step4_final_verdict": final_result.overall_verdict,
-                "step4_citations_count": len(final_result.supporting_citations),
+                "step4_analysis_text_length": len(final_result.analysis_text),
                 "total_processing_time_ms": processing_time
             },
             "files_created": [
@@ -256,11 +263,12 @@ async def process_text_request(request: TextRequest) -> AnalysisResponse:
         processing_time = int((time.time() - start_time) * 1000)
         
         # Return error response
+        error_message = f"Erro durante processamento: {str(e)}. Não foi possível completar a análise."
         return AnalysisResponse(
             message_id=f"error_{hash(request.text)}",
-            verdict="unverifiable",
-            rationale=f"Error during processing: {str(e)}",
-            citations=[],
+            verdict="error",
+            rationale=error_message,
+            responseWithoutLinks=error_message,  # Same as rationale for errors
             processing_time_ms=processing_time
         )
 

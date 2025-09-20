@@ -233,29 +233,19 @@ class AdjudicationInput(BaseModel):
 class FactCheckResult(BaseModel):
     """Final result of the fact-checking pipeline"""
     original_query: str
-    overall_verdict: str  # "true", "false", "misleading", "unverifiable", "mixed"
-    rationale: str
-    supporting_citations: List[Citation]
+    analysis_text: str = Field(..., description="Complete analysis as formatted text")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "original_query": "I heard that vaccine X causes infertility in women, is this true?",
-                "overall_verdict": "false",
-                "rationale": "Scientific evidence from multiple health authorities shows no link between vaccine X and infertility. Clinical trials and post-marketing surveillance have not identified fertility issues as a side effect.",
-                "claim_verdicts": {
-                    "Vaccine X causes infertility in women": "false"
-                },
-                "supporting_citations": [
-                    {
-                        "url": "https://health.gov/vaccine-safety",
-                        "title": "Vaccine Safety Study",
-                        "publisher": "Ministry of Health",
-                        "published_at": "2024-11-05",
-                        "quoted": "No associations with infertility were observed in clinical studies"
-                    }
-                ],
-                "processing_time_ms": 8500
+                "analysis_text": """O usuário questionou sobre a relação entre vacina X e infertilidade feminina. Esta é uma preocupação comum que circula em redes sociais mas não tem base científica sólida.
+
+                Análise por alegação:
+                • Vacina X causa infertilidade em mulheres: FALSE
+
+                Fontes de apoio:
+                - Ministerio da Saúde: nenhuma ligação entre vacinas e autismo foi encontrada """
             }
         }
 
