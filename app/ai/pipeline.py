@@ -223,6 +223,9 @@ async def process_text_request(request: TextRequest) -> AnalysisResponse:
         split_marker = "Fontes de apoio:"
         if split_marker in analysis_text:
             response_without_links = analysis_text.split(split_marker)[0].strip()
+            # If responseWithoutLinks is empty after splitting, use full rationale
+            if not response_without_links:
+                response_without_links = analysis_text
         else:
             response_without_links = analysis_text  # If no sources section, use full text
         
