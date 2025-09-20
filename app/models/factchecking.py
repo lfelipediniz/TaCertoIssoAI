@@ -66,11 +66,10 @@ class ClaimExtractionResult(BaseModel):
 # ===== STEP 3: EVIDENCE RETRIEVAL =====
 class Citation(BaseModel):
     """A single source citation"""
-    url: str = Field(..., description="URL of the source")
-    title: str = Field(..., description="Title of the article/source")
-    publisher: str = Field(..., description="Publisher or organization name")
-    published_at: Optional[str] = Field(None, description="Publication date in YYYY-MM-DD format")
-    quoted: Optional[str] = Field(None, description="Relevant excerpt from the source")
+    url: str
+    title: str
+    publisher: str
+    quoted: str
 
     class Config:
         json_schema_extra = {
@@ -157,27 +156,10 @@ class AdjudicationInput(BaseModel):
 
 class FactCheckResult(BaseModel):
     """Final result of the fact-checking pipeline"""
-    original_query: str = Field(..., description="The original user question/text")
-    overall_verdict: Literal["true", "false", "misleading", "unverifiable", "mixed"] = Field(
-        ..., 
-        description="Overall verdict considering all claims"
-    )
-    rationale: str = Field(
-        ..., 
-        description="2-5 sentences explanation of the overall verdict",
-        min_length=10,
-        max_length=2000
-    )
-    claim_verdicts: Dict[str, Literal["true", "false", "misleading", "unverifiable"]] = Field(
-        ...,
-        description="Individual verdict for each claim"
-    )
-    supporting_citations: List[Citation] = Field(
-        ..., 
-        description="Key citations supporting the overall verdict",
-        min_items=1
-    )
-    processing_time_ms: int = Field(default=0, description="Total processing time")
+    original_query: str
+    overall_verdict: str  # "true", "false", "misleading", "unverifiable", "mixed"
+    rationale: str
+    supporting_citations: List[Citation]
 
     class Config:
         json_schema_extra = {

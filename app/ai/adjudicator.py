@@ -61,6 +61,7 @@ Forneça o resultado no formato estruturado solicitado.""")
 ])
 
 # Create the adjudication chain with structured output
+# Note: Using response_format="json_object" as fallback if schema issues persist
 adjudication_chain = (
     adjudication_prompt 
     | reasoning_model.with_structured_output(FactCheckResult)
@@ -139,8 +140,6 @@ def _format_evidence_for_prompt(evidence_map: Dict[str, ClaimEvidence]) -> str:
             for i, citation in enumerate(evidence.citations, 1):
                 evidence_text += f"  {i}. **{citation.title}** ({citation.publisher})\n"
                 evidence_text += f"     URL: {citation.url}\n"
-                if citation.published_at:
-                    evidence_text += f"     Data: {citation.published_at}\n"
                 if citation.quoted:
                     evidence_text += f"     Trecho: \"{citation.quoted}\"\n"
                 evidence_text += "\n"
@@ -177,11 +176,9 @@ def _validate_and_enhance_result(result: FactCheckResult, input_data: Adjudicati
         # Take up to 3 best citations
         result.supporting_citations = all_citations[:3]
     
-    # Ensure rationale is within bounds
+    # Ensure rationale is reasonable length
     if len(result.rationale) < 10:
         result.rationale = "Análise baseada nas evidências fornecidas não permite conclusão definitiva."
-    elif len(result.rationale) > 2000:
-        result.rationale = result.rationale[:1997] + "..."
     
     return result
 
@@ -208,9 +205,7 @@ def _create_fallback_result(input_data: AdjudicationInput, error_msg: str) -> Fa
         overall_verdict="unverifiable",
         rationale=f"Não foi possível completar a análise devido a um erro técnico. "
                  f"Recomendamos verificar manualmente as fontes disponíveis. Erro: {error_msg[:100]}",
-        claim_verdicts={claim.text: "unverifiable" for claim in input_data.claims},
-        supporting_citations=citations[:3],  # Max 3 citations
-        processing_time_ms=0
+        supporting_citations=citations[:3]  # Max 3 citations
     )
 
 
@@ -225,8 +220,7 @@ async def generate_citations(sources: List[Dict]) -> List[Citation]:
                 url=source.get("url", ""),
                 title=source.get("title", ""),
                 publisher=source.get("publisher", ""),
-                published_at=source.get("published_at"),
-                quoted=source.get("quoted")
+                quoted=source.get("quoted", "")
             )
             citations.append(citation)
         except Exception:
