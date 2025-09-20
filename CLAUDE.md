@@ -80,16 +80,22 @@ User sends a link. Backend fetches metadata, extracts the central statement, and
 
 ### Backend
 
-* API Layer: HTTPS REST endpoints for inbound webhook, job enqueue, and status query.
-* Processing:
-  * Claim extraction: heuristics and NLP to isolate the central statement.
-  * Retrieval: web and news search with quality filters, deduplication, and date normalization.
-  * Adjudication: LLM reasoning grounded strictly in retrieved evidence.
-* Datastores:
-  * Relational DB for requests, verdicts, citations, feedback.
-  * Object storage for optional media.
-  * Cache for repeated claims and recent evidence.
-* Observability: logs, metrics, tracing, and privacy filters for PII.
+* **Framework**: FastAPI with Python 3.11+, deployable to Heroku/Render
+* **API Layer**: Three main endpoints for content analysis:
+  * `/api/text` - Text-only fact-checking
+  * `/api/images` - Image analysis with OCR
+  * `/api/multimodal` - Combined text and image processing
+* **Processing**:
+  * Claim extraction: heuristics and NLP to isolate the central statement
+  * Retrieval: web and news search with quality filters, deduplication, and date normalization
+  * Adjudication: LLM reasoning grounded strictly in retrieved evidence
+* **Datastores**:
+  * SQLAlchemy for database ORM (PostgreSQL/SQLite)
+  * Redis for caching repeated claims and recent evidence
+  * Optional object storage for media files
+* **Configuration**: Environment-based settings without Pydantic dependencies
+* **Validation**: Python dataclasses for request/response schemas
+* **Observability**: Basic logging with configurable levels
 
 ### ML and AI
 
@@ -134,48 +140,63 @@ Supporting services: admin auth, metrics and alerts, storage and retention jobs.
 
 ---
 
-## 12) API Sketch - Backend (REST, subject to change)
+## 12) API Endpoints - FastAPI Backend
 
-### POST /webhook/evolution
-Inbound webhook from Evolution API.
+### POST /api/text
+Analyze text-only messages for fact-checking.
 
-Body:
-* event type and message payload
-* id, from, timestamp, type
-* text or media reference
-
-Response:
-* 200 OK and enqueue job id
-
-### POST /analyze
-Internal only - used by the webhook to trigger processing.
-
-Body:
-* message_id, sender_id
-* text, urls[], media_refs[]
-* consent flag and locale
+Body (JSON):
+```json
+{
+  "text": "string (required, max 10000 chars)",
+  "chatId": "string (optional)"
+}
+```
 
 Response:
-* id, queued
+```json
+{
+  "message_id": "string",
+  "verdict": "true|false|misleading|unverifiable",
+  "confidence": 0.85,
+  "rationale": "Brief explanation",
+  "citations": [
+    {
+      "title": "Article title",
+      "source": "Source name",
+      "url": "https://...",
+      "snippet": "Relevant excerpt",
+      "published_at": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "processing_time_ms": 4500
+}
+```
 
-### GET /result/{id}
-Fetch final result.
+### POST /api/images
+Analyze image-only messages using OCR for fact-checking.
 
-Response:
-* id, verdict in {true, false, misleading, unverifiable}
-* confidence in [0, 1]
-* citations: array of {title, source, url, snippet, published_at}
-* rationale: short paragraph
-* processing_ms
+Body (multipart/form-data):
+* `file`: Image file (required)
+* `chatId`: String (optional)
 
-### POST /feedback
-Capture user feedback.
+Response: Same as `/api/text`
 
-Body:
-* id, vote in {up, down}, notes optional
+### POST /api/multimodal
+Analyze messages containing both text and images.
 
-Response:
-* 200 OK
+Body (multipart/form-data):
+* `text`: String (optional, max 10000 chars)
+* `file`: Image file (optional)
+* `chatId`: String (optional)
+
+Response: Same as `/api/text`
+
+### GET /
+Root endpoint returning API info.
+
+### GET /health
+Health check endpoint.
 
 ---
 
