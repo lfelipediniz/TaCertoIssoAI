@@ -82,7 +82,7 @@ cp .env.example .env
 # Edit .env with your API keys
 
 # 4. Run the application
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+guvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **Required environment variables:**
