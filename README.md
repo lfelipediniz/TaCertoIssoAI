@@ -1,14 +1,53 @@
-# Fake News Detector API
+# Fake News Detector - WhatsApp Bot
 
-A WhatsApp chatbot backend for fact-checking and claim verification using LangChain and OpenAI.
+A WhatsApp chatbot for fact-checking and fake news detection using multimodal AI and fact-checking APIs.
 
-## Overview
+## 🏆 Special Achievement
 
-This FastAPI application provides a comprehensive fact-checking pipeline that:
+I am very happy and proud to share with you a new conquest:
+
+**1st place at RAIA's Hackathon 2025**, whose theme was "AI for Information Quality: Understanding, Awareness and Trust in the Digital World".
+
+In a world surrounded and driven by information, this subject shows a light on the right point: the fight against disinformation is an urgent challenge. Fake News are now even harder to detect and easier to share. Deep fakes, AI-generated images, texts and voices, automated bots and so on turn the work against misinformation through the internet into a real and deep problem nowadays. Remember: fake news can kill people (as seen during the COVID-19 pandemic), destroy nations and lead people to unhealthy and nonsense habits.
+
+So, congratulations and special thanks to **RAIA - Rede de Avanço em Inteligência Artificial** for bringing up efforts to this cause, and to **Brasil Monks** for believing in it and turning this event possible.
+
+Thinking about this case, our team led a project focused on the core of the phenomenon: **WhatsApp**. The place where the majority of fake news is shared, a fact which is powered by encryption and the difficulty of tracing its source. So, we created an automated bot for WhatsApp using an integration between LLM's, WhatsApp and Google Fact Check APIs, which can magnificently tell in an easy way to the user if information is true, false or overblown. Also, the bot can say why it is not real and show real sources about the information. It doesn't matter what kind of information it is: text? links? voices? images? The bot is based on multimodal AI and can analyze everything.
+
+It was 12 hours of deep immersion in this application with my teammates passing through mountains of problem-solving and leading a real integration between every component of the team, each one in their mastered abilities, which result could be not other but the first place of the competition. Thank you so much.
+
+## Table of Contents
+- [Fake News Detector - WhatsApp Bot](#fake-news-detector---whatsapp-bot)
+  - [🏆 Special Achievement](#-special-achievement)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction](#introduction)
+  - [Architecture](#architecture)
+  - [Requirements](#requirements)
+  - [How to Use (Super Easy!)](#how-to-use-super-easy)
+    - [Automatic Installation](#automatic-installation)
+    - [Manual Execution (Advanced)](#manual-execution-advanced)
+  - [Project Structure](#project-structure)
+  - [API Endpoints](#api-endpoints)
+    - [Core Endpoints](#core-endpoints)
+      - [`POST /api/text`](#post-apitext)
+      - [`POST /api/images`](#post-apiimages)
+      - [`POST /api/multimodal`](#post-apimultimodal)
+    - [Test Endpoints](#test-endpoints)
+      - [`GET /api/test-adjudicator`](#get-apitest-adjudicator)
+      - [`GET /api/test-evidence-retrieval`](#get-apitest-evidence-retrieval)
+    - [System Endpoints](#system-endpoints)
+      - [`GET /`](#get-)
+      - [`GET /health`](#get-health)
+  - [Development](#development)
+  - [Features](#features)
+
+## Introduction
+
+**Fake News Detector** is a comprehensive fact-checking system that:
 - Extracts verifiable claims from Portuguese text
 - Retrieves evidence from trusted sources
 - Uses LLM adjudication to provide verdicts with citations
-- Supports text-only, image (OCR), and multimodal analysis
+- Supports text and multimodal analysis
 
 ## Architecture
 
@@ -20,30 +59,53 @@ This FastAPI application provides a comprehensive fact-checking pipeline that:
 
 ## Requirements
 
-- Python 3.11+
+- [**Python 3.11+**](https://www.python.org/downloads/)
 - OpenAI API Key
 - Google Fact-Check API Key (optional)
 
-## Installation
+## How to Use (Super Easy!)
 
-1. **Clone the repository:**
+### Automatic Installation
+
 ```bash
-git clone <repository-url>
-cd MachinesAreSmoking
+# 1. Clone the repository
+git clone https://github.com/lfelipediniz/TaCertoIssoAI
+cd TaCertoIssoAI
+
+# 2. Run the project (does everything automatically!)
+./start.sh
 ```
 
-2. **Install dependencies:**
+**That's it!** The script automatically:
+- Checks if Python is installed
+- Creates a Python virtual environment
+- Installs all dependencies
+- Configures environment variables
+- Starts the application
+
+### Manual Execution (Advanced)
+
+If you want to run manually or customize parameters:
+
 ```bash
+# 1. Clone the repository
+git clone https://github.com/lfelipediniz/TaCertoIssoAI
+cd TaCertoIssoAI
+
+# 2. Set up the environment
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
-```
 
-3. **Set up environment variables:**
-```bash
+# 3. Set up environment variables
 cp .env.example .env
 # Edit .env with your API keys
+
+# 4. Run the application
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Required environment variables:
+**Required environment variables:**
 ```env
 # AI Services
 OPENAI_API_KEY=your_openai_api_key_here
@@ -54,22 +116,32 @@ DEBUG=False
 PORT=8000
 ```
 
-## Running the Application
-
-**Development:**
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Production:**
-```bash
-gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-```
-
 **Access the API:**
 - API Documentation: http://localhost:8000/docs
 - Health Check: http://localhost:8000/health
 - Root: http://localhost:8000/
+
+## Project Structure
+
+```
+app/
+├── main.py              # FastAPI application entry point
+├── api/
+│   └── endpoints/       # API route handlers
+│       ├── text.py      # Text analysis endpoints
+│       ├── images.py    # Image analysis endpoints
+│       └── multimodal.py # Combined analysis endpoints
+├── core/
+│   └── config.py        # Configuration management
+├── models/
+│   ├── schemas.py       # API request/response models
+│   └── factchecking.py  # Pipeline data models
+└── ai/
+    ├── claim_extractor.py    # Step 1: Extract claims from text
+    ├── evidence_retrieval.py # Step 2: Evidence retrieval
+    ├── adjudicator.py        # Step 3: LLM fact-checking
+    └── pipeline.py           # Complete pipeline orchestration
+```
 
 ## API Endpoints
 
@@ -138,28 +210,6 @@ API information and version.
 #### `GET /health`
 Health check endpoint.
 
-## Project Structure
-
-```
-app/
-├── main.py              # FastAPI application entry point
-├── api/
-│   └── endpoints/       # API route handlers
-│       ├── text.py      # Text analysis endpoints
-│       ├── images.py    # Image analysis endpoints
-│       └── multimodal.py # Combined analysis endpoints
-├── core/
-│   └── config.py        # Configuration management
-├── models/
-│   ├── schemas.py       # API request/response models
-│   └── factchecking.py  # Pipeline data models
-└── ai/
-    ├── claim_extractor.py    # Step 1: Extract claims from text
-    ├── retrieval.py          # Step 2: Evidence retrieval
-    ├── adjudicator.py        # Step 3: LLM fact-checking
-    └── pipeline.py           # Complete pipeline orchestration
-```
-
 ## Development
 
 **Run tests:**
@@ -177,61 +227,15 @@ curl -X POST "http://localhost:8000/api/text" \
 **View API documentation:**
 Visit http://localhost:8000/docs for interactive Swagger documentation.
 
-## Deployment
-
-### Render.com (Recomendado)
-
-1. **Connect Repository:**
-   - Go to [render.com](https://render.com)
-   - Create new Web Service
-   - Connect your GitHub repository
-
-2. **Configure Build Settings:**
-   ```
-   Build Command: pip install -r requirements.txt
-   Start Command: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
-   ```
-
-3. **Set Environment Variables:**
-   ```
-   OPENAI_API_KEY=your_openai_api_key_here
-   GOOGLE_API_KEY=your_google_api_key_here
-   DEBUG=False
-   PORT=8000
-   SECRET_KEY=your-secret-key-here
-   ```
-
-4. **Deploy:**
-   - Render will automatically build and deploy from your main branch
-   - Your API will be available at: `https://your-app-name.onrender.com`
-
-### Heroku:
-```bash
-# Uses Procfile and runtime.txt
-git push heroku main
-```
-
-### Railway:
-```bash
-# Uses gunicorn command from Procfile
-# Set environment variables in platform dashboard
-```
-
 ## Features
 
-- ✅ **Portuguese Language Support** - Optimized for pt-BR content
-- ✅ **Structured LLM Outputs** - Type-safe Pydantic models throughout
-- ✅ **Async-First Design** - High-performance async operations
-- ✅ **Error Handling** - Graceful fallbacks and detailed error messages
-- ✅ **Evidence Citations** - Transparent source attribution
-- ✅ **Multi-Step Pipeline** - Modular claim extraction and verification
-- 🚧 **OCR Support** - Image text extraction (planned)
-- 🚧 **WhatsApp Integration** - Evolution API webhook support (planned)
+- **Portuguese Language Support** - Optimized for pt-BR content
+- **Structured LLM Outputs** - Type-safe Pydantic models throughout
+- **Async-First Design** - High-performance async operations
+- **Evidence Citations** - Transparent source attribution
+- **Multi-Step Pipeline** - Modular claim extraction and verification
+- **WhatsApp Integration** - Evolution API webhook support
 
-## Contributing
+---
 
-1. Follow the existing code structure and patterns
-2. Use async/await for all I/O operations
-3. Maintain type hints and Pydantic models
-4. Test endpoints using the `/test-*` endpoints
-5. Update documentation for new features
+**Fight against Fake News! 🚀📰**
