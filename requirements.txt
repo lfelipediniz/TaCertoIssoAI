@@ -18,3 +18,11 @@ lxml>=4.6.0
 lxml[html_clean]>=6.0.0
 beautifulsoup4>=4.13.0
 requests>=2.31.0
+trafilatura>=1.6.0
+readability-lxml>=0.8.1
+goose3>=3.1.15
+# Selenium dependencies for advanced web scraping
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+# Additional dependencies for containerized environments
+xvfbwrapper>=0.2.9
