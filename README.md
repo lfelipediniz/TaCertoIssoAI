@@ -3,7 +3,7 @@
 A WhatsApp chatbot for fact-checking and fake news detection using multimodal AI and fact-checking APIs.
 
 ## 🏆 Special Achievement
-
+ 
 I am very happy and proud to share with you a new conquest:
 
 **1st place at RAIA's Hackathon 2025**, whose theme was "AI for Information Quality: Understanding, Awareness and Trust in the Digital World".
