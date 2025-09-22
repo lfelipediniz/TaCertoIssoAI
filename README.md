@@ -194,9 +194,6 @@ curl -X POST "http://localhost:8000/api/text" \
   -d '{"text": "A vacina X causa infertilidade em mulheres"}'
 ```
 
-**View API documentation:**
-Visit http://localhost:8000/docs for interactive Swagger documentation.
-
 ## Features
 
 - **Portuguese Language Support** - Optimized for pt-BR content
