@@ -5,7 +5,7 @@
 ## 1) Summary
 
 A WhatsApp chatbot that receives user messages via Evolution API, extracts the central claim from text or media, runs a retrieval plus LLM adjudication pipeline, and replies with a verdict and citations. The backend is our codebase. The bot supports text-only messages, images with or without captions, and links.
-
+ 
 ---
 
 ## 2) Purpose & Motivation
