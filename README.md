@@ -63,27 +63,7 @@ It was 12 hours of deep immersion in this application with my teammates passing 
 - OpenAI API Key
 - Google Fact-Check API Key (optional)
 
-## How to Use (Super Easy!)
-
-### Automatic Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/lfelipediniz/TaCertoIssoAI
-cd TaCertoIssoAI
-
-# 2. Run the project (does everything automatically!)
-./start.sh
-```
-
-**That's it!** The script automatically:
-- Checks if Python is installed
-- Creates a Python virtual environment
-- Installs all dependencies
-- Configures environment variables
-- Starts the application
-
-### Manual Execution (Advanced)
+### Manual Execution
 
 If you want to run manually or customize parameters:
 
@@ -110,17 +90,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 # AI Services
 OPENAI_API_KEY=your_openai_api_key_here
 GOOGLE_API_KEY=your_google_api_key_here
-
-# App Configuration
-DEBUG=False
-PORT=8000
 ```
-
-**Access the API:**
-- API Documentation: http://localhost:8000/docs
-- Health Check: http://localhost:8000/health
-- Root: http://localhost:8000/
-
 ## Project Structure
 
 ```
